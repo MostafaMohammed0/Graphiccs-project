@@ -1,0 +1,2 @@
+King's allowed moves.
+When any other piece rather than King is moved , which causes check mate , That move is invalid . Need a code not allow this type of move .
