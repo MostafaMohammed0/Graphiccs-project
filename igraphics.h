@@ -3,6 +3,7 @@
 
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
+#include <Gl/GLAux.h>
 #include <windows.h>
 #include <mmsystem.h>
 #include <math.h>
@@ -13,12 +14,20 @@
 #include <vector>
 #include <tuple>
 #include <fstream>
+#include <cstdio>
+#include <windows.h>
+#include <string>
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+#include "truetype.h" 
 
+
+#define FONT_SIZE 24
+#define MAX_CHARACTERS 256  
 #define PI (acos(-1.0))
 #ifndef ERR
 #define ERR 1e-8
 #endif
-
 using namespace std;
 
 class iG {
@@ -27,37 +36,193 @@ protected:
     {
         double x, y;
     };
-
     static point solve_sim_eqn(double a1, double b1, double c1, double a2, double b2, double c2)
     {
         double d = a1 * b2 - a2 * b1;
         struct point p;
         p.x = (b1 * c2 - b2 * c1) / d;
-        p.y = (c1 * a2 - c2 * b1) / d;
+        p.y = (c1 * a2 - c2 * a1) / d;
         return p;
     }
 
-    static void iPath(double X[], double Y[], int n, double d = 1, int closed = 0, int dashed = 0, double dash = 10, double gap = 5, int aligned = 0)
+    static void iPath(double X[],
+                      double Y[],
+                      int n,
+                      double d = 1,
+                      int closed = 0,
+                      int dashed = 0,
+                      double dash = 10,
+                      double gap = 5,
+                      int aligned = 0)
     {
-        // Path drawing logic remains the same
-        // Ensure the rendering functions use OpenGL commands
-    }
+        /*
+         *  Solves equations of consecutive parallel straight lines, distanced d/2 from the
+         *  original line to determine points for the stroked path.
+         *
+         *  For the first end points in non-closed, finds perpendicularly d/2 distanced points
+         *
+         */
 
+        //  p1 ------------------- p2
+        //     -------------------
+        //  p0 ------------------- p3
+        double pX[4], pY[4];
+        double dy, dx, a1, b1, c1, a2, b2, c2, M1, M2, S;
+        int s1, s2, end = n + 2 * closed;
+        point p1, p2;
+        S = 0;
+        // repeating first two points like points in the middle for closed
+        for (int i = 0; i < end; i++)
+        {
+            if (i == n - 1 && !closed)
+            {
+                s2 = s1;
+                a2 = a1, b2 = b1, c2 = c1;
+            }
+            else
+            {
+                dy = Y[(i + 1) % n] - Y[i % n];
+                dx = X[(i + 1) % n] - X[i % n];
+                if (i == 0)
+                    s2 = 1;
+                else
+                {
+                    // only combination of inequalities that gives the right signs :3
+                    s2 = (X[i % n] > X[(i - 1) % n] && X[(i + 1) % n] > X[i % n]) ||
+                         (X[i % n] <= X[(i - 1) % n] && X[(i + 1) % n] <= X[i % n]);
+                    s2 = s1 * (2 * s2 - 1);
+                }
+                if (dx > 0)
+                    a2 = -dy, b2 = dx;
+                else
+                    a2 = dy, b2 = -dx;
+                c2 = -(a2 * X[i % n] + b2 * Y[i % n]);
+                M2 = sqrt(a2 * a2 + b2 * b2);
+            }
+            // we don't want to draw the end points normally for closed
+            if ((!closed && (i == 0 || i == n - 1)) || fabs(a1 * b2 - a2 * b1) < ERR)
+            {
+                // solving the perpendicular and two parralel st lines with distance d/2 from the original
+                a1 = b2, b1 = -a2, c1 = -(a1 * X[i % n] + b1 * Y[i % n]);
+                p1 = solve_sim_eqn(a1, b1, c1, a2, b2, c2 + s2 * d * M2 / 2),
+                p2 = solve_sim_eqn(a1, b1, c1, a2, b2, c2 - s2 * d * M2 / 2);
+            }
+            // we want to draw for i == n - 1 normally for closed, but not i == 0
+            else if (i != 0)
+            {
+                // solving two consecutive parallel d distanced st lines
+                p1 = solve_sim_eqn(a1, b1, c1 + s1 * d * M1 / 2, a2, b2, c2 + s2 * d * M2 / 2),
+                p2 = solve_sim_eqn(a1, b1, c1 - s1 * d * M1 / 2, a2, b2, c2 - s2 * d * M2 / 2);
+            }
+            // keeping last two points
+            pX[2] = p1.x, pY[2] = p1.y;
+            pX[3] = p2.x, pY[3] = p2.y;
+            // nothing to draw when i == 0 and i == 1 if closed
+            if (i != 0 && !(closed && i == 1))
+            {
+                if (dashed)
+                {
+                    dx = X[i % n] - X[(i - 1) % n];
+                    dy = Y[i % n] - Y[(i - 1) % n];
+                    double dS = sqrt(dx * dx + dy * dy);
+                    double x, y;
+                    double S1 = S, S2;
+                    double tX[4], tY[4];
+                    // taking the vector approach for points at perpendicular distance
+                    struct point dr
+                    {
+                        .x = dy / dS * d / 2, .y = -dx / dS * d / 2
+                    };
+                    if (aligned)
+                    {
+                        double t, dt;
+                        int m = floor((dS - dash - gap) / (dash + gap));             // number of dashes in between
+                        double gap_ = gap + (dS - (m + 1) * (dash + gap)) / (m + 1); // leading and trailing space
+                        for (int j = -1; j <= m; j++)
+                        {
+                            if (j == -1)
+                                t = 0, dt = dash / 2;
+                            else if (j == m)
+                                t = dS - dash / 2, dt = dash / 2;
+                            else
+                            {
+                                t = (dash / 2 + gap_ + j * (dash + gap_));
+                                dt = dash;
+                            }
+                            for (int k = 0; k < 2; k++)
+                            {
+                                x = (t + dt * k) / dS * dx + X[(i - 1) % n];
+                                y = (t + dt * k) / dS * dy + Y[(i - 1) % n];
+                                if ((j == -1 && !k) || (j == m && k))
+                                {
+                                    tX[1 + k] = pX[1 + k], tY[1 + k] = pY[1 + k];
+                                    tX[3 * k] = pX[3 * k], tY[3 * k] = pY[3 * k];
+                                }
+                                else
+                                {
+                                    tX[1 + k] = x + dr.x, tY[1 + k] = y + dr.y;
+                                    tX[3 * k] = x - dr.x, tY[3 * k] = y - dr.y;
+                                }
+                            }
+                            iG::IDraw::IFilled::iPolygon(tX, tY, 4);
+                        }
+                    }
+                    else
+                    {
+                        while (S1 < dS)
+                        {
+                            S2 = S1 + dash;
+                            for (int j = 0; j < 2; j++)
+                            {
+                                if (j == 0 && S1 <= 0)
+                                {
+                                    tX[1] = pX[1], tY[1] = pY[1];
+                                    tX[0] = pX[0], tY[0] = pY[0];
+                                }
+                                else if (j == 1 && S2 >= dS)
+                                {
+                                    tX[2] = pX[2], tY[2] = pY[2];
+                                    tX[3] = pX[3], tY[3] = pY[3];
+                                }
+                                else
+                                {
+                                    double t = (j == 0 ? S1 : S2);
+                                    x = t / dS * dx + X[(i - 1) % n];
+                                    y = t / dS * dy + Y[(i - 1) % n];
+                                    tX[1 + j] = x + dr.x, tY[1 + j] = y + dr.y;
+                                    tX[3 * j] = x - dr.x, tY[3 * j] = y - dr.y;
+                                }
+                            }
+                            iG::IDraw::IFilled::iPolygon(tX, tY, 4);
+                            S1 += (dash + gap);
+                        }
+                        if (S2 <= dS)
+                            S = S1 - dS; // gap before first dash
+                        else
+                            S = S1 - dash - gap - dS; // unfinished dash
+                    }
+                }
+                else
+                    iG::IDraw::IFilled::iPolygon(pX, pY, 4);
+            }
+            a1 = a2, b1 = b2, c1 = c2, M1 = M2, s1 = s2;
+            // shifting points left
+            pX[1] = pX[2], pY[1] = pY[2];
+            pX[0] = pX[3], pY[0] = pY[3];
+        }
+    }
     static void iClear()
     {
-        glClear(GL_COLOR_BUFFER_BIT);
-        glMatrixMode(GL_MODELVIEW);
+        glClear(GL_COLOR_BUFFER_BIT) ;
+        glMatrixMode(GL_MODELVIEW) ;
         glClearColor(iClearR / 255, iClearG / 255, iClearB / 255, 1.0);
         glFlush();
     }
-
     virtual void iAbstract() = 0;
-
     static int iWindowHeight, iWindowWidth, iScreenHeight, iScreenWidth, iWindowX, iWindowY;
     static double iClearR, iClearG, iClearB;
     static double iMouseX, iMouseY;
-    static double iMouseDir;
-
+    static double  iMouseDir;
 public:
     static int ifft;
     static void iDraw();
@@ -66,9 +231,9 @@ public:
     static void iSpecialKeyboard(unsigned char);
     static void iSpecialKeyboardUp(unsigned char);
     static void iMouseDrag(int, int);
-    static void iMouseMove(double, double);
-    static void iMouseClick(GLFWwindow*, int, int, int);
-    static void iMouseScroll(GLFWwindow*, double, double);
+    static void iMouseMove(int, int);
+    static void iMouseClick(int button, int state, int x, int y);
+    static void iMouseScroll(int dir);
     static void iResize();
     static void iSetClearColor(double r, double g, double b)
     {
@@ -76,7 +241,6 @@ public:
         iClearG = g;
         iClearB = b;
     }
-
     static int iGetWindowHeight()
     {
         return iWindowHeight;
@@ -85,13 +249,13 @@ public:
     {
         return iWindowWidth;
     }
-    static void iSetWindowHeight(int height)
+    static int iSetWindowHeight(int height)
     {
-        iWindowHeight = height;
+        return iWindowHeight = height;
     }
-    static void iSetWindowWidth(int width)
+    static int iSetWindowWidth(int width)
     {
-        iWindowWidth = width;
+        return iWindowWidth = width;
     }
     static int iGetScreenHeight()
     {
@@ -101,13 +265,13 @@ public:
     {
         return iScreenWidth;
     }
-    static void iSetScreenHeight(int height)
+    static int iSetScreenHeight(int height)
     {
-        iScreenHeight = height;
+        return iScreenHeight = height;
     }
-    static void iSetScreenWidth(int width)
+    static int iSetScreenWidth(int width)
     {
-        iScreenWidth = width;
+        return iScreenWidth = width;
     }
 
     static double iGetMouseX()
@@ -118,243 +282,301 @@ public:
     {
         return iMouseY;
     }
-};
-
-
-    static void iSetMouseX(double x)
-{
-    glfwSetCursorPos(window, x, iMouseY);  // Use glfwSetCursorPos for setting mouse position
-}
-
-static void iSetMouseY(double y)
-{
-    glfwSetCursorPos(window, iMouseX, y);  // Use glfwSetCursorPos for setting mouse position
-}
-
-static void iSetWindowX(double x)
-{
-    iWindowX = x;
-}
-
-static void iSetWindowY(double y)
-{
-    iWindowY = y;
-}
-
-static void iSetMouse(double x, double y)
-{
-    glfwSetCursorPos(window, x, y);  // Use glfwSetCursorPos for setting mouse position
-}
-
-static double getMouseDirection()
-{
-    return iMouseDir;
-}
-
-static void iMouseDirection(int mx, int my)
-{
-    // Setting the mouse direction between 0 and 360
-    int dx = mx - iMouseX, dy = my - iMouseY;
-    double dir = (atan(abs(1.0 * dy / dx)) * 180) / acos(-1);
-    if (dx >= 0 && dy >= 0)
-    {
-        iMouseDir = dir;
-    }
-    else if (dx >= 0 && dy < 0)
-    {
-        iMouseDir = 360 + dir;
-    }
-    else if (dx < 0 && dy >= 0)
-    {
-        iMouseDir = 180 + dir;
-    }
-    else if (dx < 0 && dy < 0)
-    {
-        iMouseDir = 180 + dir;
-    }
-}
-
-static void reshapeFF(int width, int height)
-{
-    iWindowWidth = width;
-    iWindowHeight = height;
-    iResize();
-}
-
-static void displayFF(void)
-{
-    iDraw();
-    glfwSwapBuffers(window);  // Replace glutSwapBuffers with glfwSwapBuffers
-}
-
-static void animFF(void)
-{
-    if (ifft == 0) {
-        ifft = 1;
-        iClear();
-    }
-    glfwPostEmptyEvent();  // Replace glutPostRedisplay with glfwPostEmptyEvent if needed
-}
-
-static void joystickHandlerFF(unsigned int buttonMask, int x, int y, int z)
-{
-    cout << buttonMask << " " << x << " " << y << " " << z << endl;
-}
-
-static void keyboardHandler1FF(GLFWwindow* window, int key, int scancode, int action, int mods)
-{
-    if (action == GLFW_PRESS || action == GLFW_REPEAT) {
-        iKeyboard(key);
-    }
-}
-
-static void keyboardUpHandler1FF(GLFWwindow* window, int key, int scancode, int action, int mods)
-{
-    if (action == GLFW_RELEASE) {
-        iKeyboardUp(key);
-    }
-}
-
-static void keyboardHandler2FF(GLFWwindow* window, int key, int scancode, int action, int mods)
-{
-    if (action == GLFW_PRESS || action == GLFW_REPEAT) {
-        iSpecialKeyboard(key);
-    }
-}
-
-static void keyboardUpHandler2FF(GLFWwindow* window, int key, int scancode, int action, int mods)
-{
-    if (action == GLFW_RELEASE) {
-        iSpecialKeyboardUp(key);
-    }
-}
-
-static void mouseDragHandlerFF(GLFWwindow* window, double xpos, double ypos)
-{
-    iMouseX = xpos;
-    iMouseY = iWindowHeight - ypos;
-    iMouseDrag(iMouseX, iMouseY);
-    glFlush();
-}
-
-static void mouseMoveHandlerFF(GLFWwindow* window, double xpos, double ypos)
-{
-    iMouseDirection(xpos, iWindowHeight - ypos);
-    iMouseX = xpos;
-    iMouseY = iWindowHeight - ypos;
-    iMouseMove(iMouseX, iMouseY);
-    glFlush();
-}
-
-static void mouseClickHandlerFF(GLFWwindow* window, int button, int action, int mods)
-{
-    iMouseX = xpos;
-    iMouseY = iWindowHeight - ypos;
-    if (action == GLFW_PRESS) {
-        iMouseClick(button, GLFW_PRESS, iMouseX, iMouseY);
-    } else if (action == GLFW_RELEASE) {
-        iMouseClick(button, GLFW_RELEASE, iMouseX, iMouseY);
-    }
-    glFlush();
-}
-
-static void mouseWheelHandlerFF(GLFWwindow* window, double xoffset, double yoffset)
-{
-    iMouseScroll(yoffset);
-}
-
-class IText {
-public:
-    static void iSmall(double x, double y, const char *str)
-    {
-        glRasterPos3d(x, y, 0);
-        int i;
-        for (i = 0; str[i]; i++) {
-            // For simplicity, using a placeholder text rendering function.
-            // Consider using a text rendering library like FreeType or FTGL.
-            renderBitmapCharacter(GLUT_BITMAP_TIMES_ROMAN_24, str[i]);
-        }
-    }
-
-    static void iBig(double x, double y, const char *str)
-    {
-        const char *p;
-        glPushMatrix();
-        glTranslatef(x, y, 0);
-        for (p = str; *p; p++) {
-            // For simplicity, using a placeholder text rendering function.
-            // Consider using a text rendering library like FreeType or FTGL.
-            renderStrokeCharacter(GLUT_STROKE_ROMAN, *p);
-        }
-        glPopMatrix();
-    }
-
-private:
-    static void renderBitmapCharacter(void *font, char c) {
-        // Placeholder function to render a bitmap character
-        // Replace with actual implementation
-    }
-
-    static void renderStrokeCharacter(void *font, char c) {
-        // Placeholder function to render a stroke character
-        // Replace with actual implementation
-    }
-};
-
-    class ITimer {
-    private:
-        static void (*iAnimFunction[10])(void);
-        static int iAnimCount;
-        static int iAnimDelays[10];
-        static int iAnimPause[10];
-        static void  __stdcall iA0(HWND, unsigned int, unsigned int, unsigned long) {if (!iAnimPause[0])iAnimFunction[0]();}
-        static void  __stdcall iA1(HWND, unsigned int, unsigned int, unsigned long) {if (!iAnimPause[1])iAnimFunction[1]();}
-        static void  __stdcall iA2(HWND, unsigned int, unsigned int, unsigned long) {if (!iAnimPause[2])iAnimFunction[2]();}
-        static void  __stdcall iA3(HWND, unsigned int, unsigned int, unsigned long) {if (!iAnimPause[3])iAnimFunction[3]();}
-        static void  __stdcall iA4(HWND, unsigned int, unsigned int, unsigned long) {if (!iAnimPause[4])iAnimFunction[4]();}
-        static void  __stdcall iA5(HWND, unsigned int, unsigned int, unsigned long) {if (!iAnimPause[5])iAnimFunction[5]();}
-        static void  __stdcall iA6(HWND, unsigned int, unsigned int, unsigned long) {if (!iAnimPause[6])iAnimFunction[6]();}
-        static void  __stdcall iA7(HWND, unsigned int, unsigned int, unsigned long) {if (!iAnimPause[7])iAnimFunction[7]();}
-        static void  __stdcall iA8(HWND, unsigned int, unsigned int, unsigned long) {if (!iAnimPause[8])iAnimFunction[8]();}
-        static void  __stdcall iA9(HWND, unsigned int, unsigned int, unsigned long) {if (!iAnimPause[9])iAnimFunction[9]();}
-    public:
-        static int iSet(int msec, void (*f)(void))
+    static void iSetMouseX(GLFWwindow* window, double x)
         {
-            int i = iAnimCount;
-
-            if (iAnimCount >= 10) {printf("Error: Maximum number of already timer used.\n"); return -1;}
-
-            iAnimFunction[i] = f;
-            iAnimDelays[i] = msec;
-            iAnimPause[i] = 0;
-
-            if (iAnimCount == 0) SetTimer(0, 0, msec, iA0);
-            if (iAnimCount == 1) SetTimer(0, 0, msec, iA1);
-            if (iAnimCount == 2) SetTimer(0, 0, msec, iA2);
-            if (iAnimCount == 3) SetTimer(0, 0, msec, iA3);
-            if (iAnimCount == 4) SetTimer(0, 0, msec, iA4);
-
-            if (iAnimCount == 5) SetTimer(0, 0, msec, iA5);
-            if (iAnimCount == 6) SetTimer(0, 0, msec, iA6);
-            if (iAnimCount == 7) SetTimer(0, 0, msec, iA7);
-            if (iAnimCount == 8) SetTimer(0, 0, msec, iA8);
-            if (iAnimCount == 9) SetTimer(0, 0, msec, iA9);
-            iAnimCount++;
-
-            return iAnimCount - 1;
+            glfwSetCursorPos(window, x, iMouseY);  // Set the X position while keeping Y the same
         }
-        static void iPause(int index) {
-            if (index >= 0 && index < iAnimCount) {
-                iAnimPause[index] = 1;
+
+        // Function to set mouse Y position
+        static void iSetMouseY(GLFWwindow* window, double y)
+        {
+            glfwSetCursorPos(window, iMouseX, y);  // Set the Y position while keeping X the same
+        }
+
+    static void iSetWindowX(double x)
+    {
+        iWindowX = x;
+    }
+    static void iSetWindowY(double y)
+    {
+        iWindowY = y;
+    }
+    static void iSetMouse(GLFWwindow* window, double x, double y)
+        {
+            glfwSetCursorPos(window, x, y);  // Set the mouse position to (x, y)
+        }
+    static double getMouseDirection()
+    {
+        return iMouseDir;
+    }
+    static void iMouseDirection(int mx, int my)
+    {
+        // Setting the mouse direction between 0 and 360
+        int dx = mx  - iMouseX , dy = my - iMouseY ;
+        double dir = (atan(abs(1.0 * dy / dx)) * 180) / acos(-1);
+        if (dx >= 0 && dy >= 0)
+        {
+            iMouseDir = dir;
+        }
+        else if (dx >= 0 && dy < 0)
+        {
+            iMouseDir = 360 + dir;
+        }
+        else if (dx < 0 && dy >= 0)
+        {
+            iMouseDir = 180 + dir;
+        }
+        else if (dx < 0 && dy < 0)
+        {
+            iMouseDir = 180 + dir;
+        }
+    }
+    static void reshapeFF(int width, int height)
+    {
+        iWindowWidth = width;
+        iWindowHeight = height;
+        iResize();
+    }
+    static void displayFF(GLFWwindow* window)
+        {
+            iDraw();                    // Call the iDraw function (where your rendering happens)
+            glfwSwapBuffers(window);     // Swap buffers to display the rendered frame
+        }
+    static void animFF(void)
+    {
+        if (ifft == 0) {
+            ifft = 1;
+            iClear();
+        }
+         glfwPostEmptyEvent();
+    }
+
+    static void joystickHandlerFF(unsigned int buttonMask, int x, int y, int z)
+    {
+        cout << buttonMask << " " << x << " " << y << " " << z << endl;
+    }
+    static void keyboardHandler1FF(unsigned char key, int x, int y)
+    {
+        iKeyboard(key);
+         glfwPostEmptyEvent();
+    }
+    static void keyboardUpHandler1FF(unsigned char key, int x, int y)
+    {
+        iKeyboardUp(key);
+         glfwPostEmptyEvent();
+    }
+    static void keyboardHandler2FF(int key, int x, int y)
+    {
+        iSpecialKeyboard(key);
+         glfwPostEmptyEvent();
+    }
+    static void keyboardUpHandler2FF(int key, int x, int y)
+    {
+        iSpecialKeyboardUp(key);
+         glfwPostEmptyEvent();
+    }
+    static void mouseDragHandlerFF(int mx, int my)
+    {
+        iMouseX = mx;
+        iMouseY = iWindowHeight - my;
+        iMouseDrag(iMouseX, iMouseY);
+        glFlush();
+    }
+
+    static void mouseMoveHandlerFF(int mx, int my)
+    {
+        iMouseDirection(mx, iWindowHeight - my);
+        iMouseX = mx;
+        iMouseY = iWindowHeight - my;
+        iMouseMove(iMouseX, iMouseY);
+        glFlush();
+    }
+
+    static void mouseClickHandlerFF(int button, int state, int x, int y)
+    {
+        iMouseX = x;
+        iMouseY = iWindowHeight - y;
+        iMouseClick(button, state, iMouseX, iMouseY);
+        glFlush();
+    }
+
+    static void mouseWheelHandlerFF(int button, int dir, int x, int y)
+    {
+        iMouseScroll(dir);
+    }
+
+
+    class IText {
+    public:
+        static GLuint fontTexture; // Texture for the font
+        static stbtt_bakedchar cdata[MAX_CHARACTERS]; // Baked characters data
+        static unsigned char bitmap[512 * 512]; // Bitmap for font rendering
+
+        // Initialize the font
+        static void initFont(const char* fontFile) {
+            unsigned char fontData[1 << 20]; // Allocate memory for the font
+            FILE* fontFileStream = fopen(fontFile, "rb");
+            fread(fontData, 1, 1 << 20, fontFileStream); // Read the font file into memory
+            fclose(fontFileStream);
+
+            // Load font with stb_truetype
+            stbtt_BakeFontBitmap(fontData, 0, FONT_SIZE, bitmap, 512, 512, 32, MAX_CHARACTERS, cdata);
+
+            // Create an OpenGL texture from the bitmap
+            glGenTextures(1, &fontTexture);
+            glBindTexture(GL_TEXTURE_2D, fontTexture);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, 512, 512, 0, GL_RED, GL_UNSIGNED_BYTE, bitmap);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        }
+
+        // Render small text
+        static void iSmall(double x, double y, const char* str) {
+            glBindTexture(GL_TEXTURE_2D, fontTexture);
+            glEnable(GL_TEXTURE_2D);
+            glPushMatrix();
+            glTranslatef(x, y, 0);
+
+            for (int i = 0; str[i]; i++) {
+                stbtt_bakedchar* c = &cdata[str[i] - 32];
+                float x0 = c->x0 / 512.0f;
+                float y0 = c->y0 / 512.0f;
+                float x1 = c->x1 / 512.0f;
+                float y1 = c->y1 / 512.0f;
+
+                glBegin(GL_QUADS);
+                glTexCoord2f(x0, y0); glVertex2f(i * FONT_SIZE, 0);
+                glTexCoord2f(x1, y0); glVertex2f((i + 1) * FONT_SIZE, 0);
+                glTexCoord2f(x1, y1); glVertex2f((i + 1) * FONT_SIZE, FONT_SIZE);
+                glTexCoord2f(x0, y1); glVertex2f(i * FONT_SIZE, FONT_SIZE);
+                glEnd();
             }
+
+            glPopMatrix();
+            glDisable(GL_TEXTURE_2D);
         }
 
-        static void iResume(int index) {
-            if (index >= 0 && index < iAnimCount) {
-                iAnimPause[index] = 0;
+        // Render big text (scaled)
+        static void iBig(double x, double y, const char* str) {
+            glBindTexture(GL_TEXTURE_2D, fontTexture);
+            glEnable(GL_TEXTURE_2D);
+            glPushMatrix();
+            glTranslatef(x, y, 0);
+
+            for (int i = 0; str[i]; i++) {
+                stbtt_bakedchar* c = &cdata[str[i] - 32];
+                float x0 = c->x0 / 512.0f;
+                float y0 = c->y0 / 512.0f;
+                float x1 = c->x1 / 512.0f;
+                float y1 = c->y1 / 512.0f;
+
+                glBegin(GL_QUADS);
+                glTexCoord2f(x0, y0); glVertex2f(i * FONT_SIZE * 1.5, 0);
+                glTexCoord2f(x1, y0); glVertex2f((i + 1) * FONT_SIZE * 1.5, 0);
+                glTexCoord2f(x1, y1); glVertex2f((i + 1) * FONT_SIZE * 1.5, FONT_SIZE * 1.5);
+                glTexCoord2f(x0, y1); glVertex2f(i * FONT_SIZE * 1.5, FONT_SIZE * 1.5);
+                glEnd();
             }
+
+            glPopMatrix();
+            glDisable(GL_TEXTURE_2D);
         }
+
     };
+
+
+       
+   class ITimer {
+        private:
+            static void (*iAnimFunction[10])(void);
+            static int iAnimCount;
+            static int iAnimDelays[10];
+            static int iAnimPause[10];
+
+            // Change the calling convention to CALLBACK
+            static void CALLBACK iA0(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime) {
+                if (!iAnimPause[0]) iAnimFunction[0]();
+            }
+
+            static void CALLBACK iA1(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime) {
+                if (!iAnimPause[1]) iAnimFunction[1]();
+            }
+
+            static void CALLBACK iA2(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime) {
+                if (!iAnimPause[2]) iAnimFunction[2]();
+            }
+
+            static void CALLBACK iA3(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime) {
+                if (!iAnimPause[3]) iAnimFunction[3]();
+            }
+
+            static void CALLBACK iA4(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime) {
+                if (!iAnimPause[4]) iAnimFunction[4]();
+            }
+
+            static void CALLBACK iA5(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime) {
+                if (!iAnimPause[5]) iAnimFunction[5]();
+            }
+
+            static void CALLBACK iA6(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime) {
+                if (!iAnimPause[6]) iAnimFunction[6]();
+            }
+
+            static void CALLBACK iA7(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime) {
+                if (!iAnimPause[7]) iAnimFunction[7]();
+            }
+
+            static void CALLBACK iA8(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime) {
+                if (!iAnimPause[8]) iAnimFunction[8]();
+            }
+
+            static void CALLBACK iA9(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime) {
+                if (!iAnimPause[9]) iAnimFunction[9]();
+            }
+
+        public:
+            static int iSet(int msec, void (*f)(void)) {
+                int i = iAnimCount;
+
+                if (iAnimCount >= 10) {
+                    printf("Error: Maximum number of timers already used.\n");
+                    return -1;
+                }
+
+                iAnimFunction[i] = f;
+                iAnimDelays[i] = msec;
+                iAnimPause[i] = 0;
+
+                // Set the timer with the correct callback function
+                if (iAnimCount == 0) SetTimer(0, 0, msec, iA0);
+                if (iAnimCount == 1) SetTimer(0, 0, msec, iA1);
+                if (iAnimCount == 2) SetTimer(0, 0, msec, iA2);
+                if (iAnimCount == 3) SetTimer(0, 0, msec, iA3);
+                if (iAnimCount == 4) SetTimer(0, 0, msec, iA4);
+                if (iAnimCount == 5) SetTimer(0, 0, msec, iA5);
+                if (iAnimCount == 6) SetTimer(0, 0, msec, iA6);
+                if (iAnimCount == 7) SetTimer(0, 0, msec, iA7);
+                if (iAnimCount == 8) SetTimer(0, 0, msec, iA8);
+                if (iAnimCount == 9) SetTimer(0, 0, msec, iA9);
+
+                iAnimCount++;
+
+                return iAnimCount - 1;
+            }
+
+            static void iPause(int index) {
+                if (index >= 0 && index < iAnimCount) {
+                    iAnimPause[index] = 1;
+                }
+            }
+
+            static void iResume(int index) {
+                if (index >= 0 && index < iAnimCount) {
+                    iAnimPause[index] = 0;
+                }
+            }
+        };
+
     class ISetColor {
     public:
         static void iSolid(double r, double g, double b)
@@ -420,46 +642,53 @@ private:
             glColor4f(r, g, b, a);
         }
     };
-    class IShowImage {
-    public:
-        static void BMP2(int x, int y, const char* filename, int ignoreColor);
-        static void BMP3(int x, int y, char filename[], int ignoreColor)
+   
+
+
+
+class IShowImage {
+public:
+    static void BMP2(int x, int y, const char* filename, int ignoreColor);
+
+    static void BMP3(int x, int y, const char* filename, int ignoreColor)
+    {
+        int width, height, channels;
+        unsigned char* data = stbi_load(filename, &width, &height, &channels, 0);
+
+        if (data == nullptr) {
+            std::cerr << "Error loading image" << std::endl;
+            return;
+        }
+
+        int nPixels = width * height;
+        int* rgPixels = new int[nPixels];
+
+        for (int i = 0, j = 0; i < nPixels; i++, j += 3)
         {
-            AUX_RGBImageRec *TextureImage;
-            TextureImage = auxDIBImageLoad(filename);
-
-            int i, j, k;
-            int width = TextureImage->sizeX;
-            int height = TextureImage->sizeY;
-            int nPixels = width * height;
-            int *rgPixels = new int[nPixels];
-
-            for (i = 0, j = 0; i < nPixels; i++, j += 3)
-            {
-                int rgb = 0;
-                for (int k = 2; k >= 0; k--)
-                {
-                    rgb = ((rgb << 8) | TextureImage->data[j + k]);
-                }
-
-                rgPixels[i] = (rgb == ignoreColor) ? 0 : 255;
-                rgPixels[i] = ((rgPixels[i] << 24) | rgb);
+            int rgb = 0;
+            for (int k = 2; k >= 0; k--) {
+                rgb = ((rgb << 8) | data[j + k]);
             }
 
-            glRasterPos2f(x, y);
-            glDrawPixels(width, height, GL_RGBA, GL_UNSIGNED_BYTE, rgPixels);
-
-            delete []rgPixels;
-            free(TextureImage->data);
-            free(TextureImage);
+            rgPixels[i] = (rgb == ignoreColor) ? 0 : 255;
+            rgPixels[i] = ((rgPixels[i] << 24) | rgb);
         }
 
+        glRasterPos2f(x, y);
+        glDrawPixels(width, height, GL_RGBA, GL_UNSIGNED_BYTE, rgPixels);
 
-        static void BMP(int x, int y, char filename[])
-        {
-            BMP2(x, y, filename, -1 /* ignoreColor */);
-        }
-    } IShowImage;
+        delete[] rgPixels;
+        stbi_image_free(data); // Free the image data after usage
+    }
+
+    static void BMP(int x, int y, const char* filename)
+    {
+        BMP2(x, y, filename, -1);  // Ignore color
+    }
+};
+
+
+
 
     class IDraw {
     public:

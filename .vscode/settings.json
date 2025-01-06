@@ -1,0 +1,8 @@
+{
+  "code-runner.executorMap": {
+    "cpp": "cd $dir && g++ $fileName -o $fileNameWithoutExt -I ${workspaceFolder}/glfw/glfw-3.4.bin.WIN64/include -I ${workspaceFolder}/glew/include -I ${workspaceFolder}/glad/include -L ${workspaceFolder}/glfw/glfw-3.4.bin.WIN64/lib-mingw-w64 -L ${workspaceFolder}/glew/lib/Release/x64 -L ${workspaceFolder}/freeglut/lib -lglfw3 -lglew32 -lglu32 -lopengl32 -mconsole && ./$fileNameWithoutExt"
+  },
+  "files.associations": {
+    "vector": "cpp"
+  }
+}
