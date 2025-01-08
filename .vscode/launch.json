@@ -5,7 +5,7 @@
       "name": "Debug OpenGL Project",
       "type": "cppdbg",
       "request": "launch",
-      "program": "${workspaceFolder}\\code\\game",  // Use backslashes for the path to the compiled executable
+      "program": "${workspaceFolder}\\game",  // Use backslashes for the path to the compiled executable
       "args": [],
       "stopAtEntry": false,
       "cwd": "${fileDirname}",

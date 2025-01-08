@@ -318,55 +318,50 @@ void ChessBoard::setBoard()
 }
 void ChessBoard::specialKeyControl(unsigned char key)
 {
-    switch (key)
-    {
-        case GLFW_KEY_ESCAPE:
-            exit(0);
-            break;
-        case GLFW_KEY_UP:
-            if (selectedCellR < 7)  // Assuming 8x8 board, valid row indices are 0-7
-            {
-                selectedCellR++;
-                if (!cell[selectedCellR][selectedCellC].empty() && 
-                    cell[selectedCellR][selectedCellC].getPiece()->getTeam() == turn && 
-                    selectedPieceR == -1)
-                    PlaySound("${workspaceFolder}\\Data\\Music\\PickUp.wav", NULL, SND_ASYNC);
-            }
-            break;
-        case GLFW_KEY_DOWN:
-            if (selectedCellR > 0)
-            {
-                selectedCellR--;
-                if (!cell[selectedCellR][selectedCellC].empty() && 
-                    cell[selectedCellR][selectedCellC].getPiece()->getTeam() == turn && 
-                    selectedPieceR == -1)
-                    PlaySound("${workspaceFolder}\\Data\\Music\\PickUp.wav", NULL, SND_ASYNC);
-            }
-            break;
-        case GLFW_KEY_LEFT:
-            if (selectedCellC > 0)
-            {
-                selectedCellC--;
-                if (!cell[selectedCellR][selectedCellC].empty() && 
-                    cell[selectedCellR][selectedCellC].getPiece()->getTeam() == turn && 
-                    selectedPieceR == -1)
-                    PlaySound("${workspaceFolder}\\Data\\Music\\PickUp.wav", NULL, SND_ASYNC);
-            }
-            break;
-        case GLFW_KEY_RIGHT:
-            if (selectedCellC < 7)  // Assuming 8x8 board, valid column indices are 0-7
-            {
-                selectedCellC++;
-                if (!cell[selectedCellR][selectedCellC].empty() && 
-                    cell[selectedCellR][selectedCellC].getPiece()->getTeam() == turn && 
-                    selectedPieceR == -1)
-                    PlaySound("${workspaceFolder}\\Data\\Music\\PickUp.wav", NULL, SND_ASYNC);
-            }
-            break;
-    }
+	switch (key)
+	{
+	case GLUT_KEY_END:
+		exit(0);
+		break;
+	case GLUT_KEY_UP:
+		if (selectedCellR < row - 1)
+		{
+			selectedCellR++;
+			if (!cell[selectedCellR][selectedCellC].empty() && cell[selectedCellR][selectedCellC].getPiece()->getTeam() == turn && selectedPieceR == -1)
+				PlaySound("Data\\Music\\PickUp.wav", NULL, SND_ASYNC);
+		}
+
+		break;
+	case GLUT_KEY_DOWN:
+		if (selectedCellR > 0)
+		{
+
+			selectedCellR--;
+			if (!cell[selectedCellR][selectedCellC].empty() && cell[selectedCellR][selectedCellC].getPiece()->getTeam() == turn && selectedPieceR == -1)
+				PlaySound("Data\\Music\\PickUp.wav", NULL, SND_ASYNC);
+		}
+
+		break;
+	case GLUT_KEY_LEFT:
+		if (selectedCellC > 0)
+		{
+			selectedCellC--;
+			if (!cell[selectedCellR][selectedCellC].empty() && cell[selectedCellR][selectedCellC].getPiece()->getTeam() == turn && selectedPieceR == -1)
+				PlaySound("Data\\Music\\PickUp.wav", NULL, SND_ASYNC);
+		}
+
+		break;
+	case GLUT_KEY_RIGHT:
+		if (selectedCellC < col - 1)
+		{
+			selectedCellC++;
+			if (!cell[selectedCellR][selectedCellC].empty() && cell[selectedCellR][selectedCellC].getPiece()->getTeam() == turn && selectedPieceR == -1)
+				PlaySound("Data\\Music\\PickUp.wav", NULL, SND_ASYNC);
+		}
+
+		break;
+	}
 }
-
-
 
 void ChessBoard::selectCell(int r, int c)
 {
@@ -412,7 +407,7 @@ void ChessBoard::keyControl(unsigned char key)
 			}
 			else if (selectedCellR == selectedPieceR && selectedCellC == selectedPieceC)
 			{
-				// PlaySound("${workspaceFolder}\\Data\\Music\\PutDown.wav", NULL, SND_ASYNC);
+				// PlaySound("Data\\Music\\PutDown.wav", NULL, SND_ASYNC);
 				deSelectPiece();
 			}
 
@@ -433,7 +428,7 @@ void ChessBoard::keyControl(unsigned char key)
 					}
 					else
 					{
-						PlaySound("${workspaceFolder}\\Data\\Music\\PutDown.wav", NULL, SND_ASYNC);
+						PlaySound("Data\\Music\\PutDown.wav", NULL, SND_ASYNC);
 						cell[selectedCellR][selectedCellC].getPiece()->die();
 						if (turn == __BLACK__)
 						{
@@ -474,7 +469,7 @@ void ChessBoard::keyControl(unsigned char key)
 							}
 							else
 							{
-								PlaySound("${workspaceFolder}\\Data\\Music\\PutDown.wav", NULL, SND_ASYNC);
+								PlaySound("Data\\Music\\PutDown.wav", NULL, SND_ASYNC);
 								if (turn == __BLACK__)
 								{
 									turn = __WHITE__;
@@ -502,7 +497,7 @@ void ChessBoard::keyControl(unsigned char key)
 							}
 							else
 							{
-								PlaySound("${workspaceFolder}\\Data\\Music\\PutDown.wav", NULL, SND_ASYNC);
+								PlaySound("Data\\Music\\PutDown.wav", NULL, SND_ASYNC);
 								if (turn == __BLACK__)
 								{
 									turn = __WHITE__;
@@ -535,7 +530,7 @@ void ChessBoard::keyControl(unsigned char key)
 				}
 				else
 				{
-					PlaySound("${workspaceFolder}\\Data\\Music\\PutDown.wav", NULL, SND_ASYNC);
+					PlaySound("Data\\Music\\PutDown.wav", NULL, SND_ASYNC);
 					if (turn == __BLACK__)
 					{
 						turn = __WHITE__;

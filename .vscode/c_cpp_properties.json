@@ -4,7 +4,7 @@
       "name": "GCC",
       "includePath": ["${workspaceFolder}/**",
                 "${workspaceFolder}\\glfw\\glfw-3.4.bin.WIN64\\include",
-                "${workspaceFolder}\\glew\\glew-2.1.0\\include",    
+                "${workspaceFolder}\\glew\\include",    
                 "${workspaceFolder}\\glad\\include" ],
       "defines": ["_DEBUG", "UNICODE", "_UNICODE"],
       "windowsSdkVersion": "10.0.22000.0",

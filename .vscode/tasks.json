@@ -32,6 +32,7 @@
         "-lglu32",
         "${workspaceFolder}\\glad\\src\\glad.c",
         // Include Glad source file for OpenGL extensions
+        "${workspaceFolder}\\igraphics.cpp",
         "${workspaceFolder}\\grid.cpp",
         "${workspaceFolder}\\box.cpp",
         "${workspaceFolder}\\chess_board.cpp",

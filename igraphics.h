@@ -1,8 +1,8 @@
+
 #ifndef __I_GRAPHICS__
 #define __I_GRAPHICS__
-
-#include <GL/glew.h>
-#include <GLFW/glfw3.h>
+#include <GL/glut.h>
+#include <GL/freeglut_ext.h>
 #include <Gl/GLAux.h>
 #include <windows.h>
 #include <mmsystem.h>
@@ -14,22 +14,11 @@
 #include <vector>
 #include <tuple>
 #include <fstream>
-#include <cstdio>
-#include <windows.h>
-#include <string>
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
-#include "truetype.h" 
-
-
-#define FONT_SIZE 24
-#define MAX_CHARACTERS 256  
 #define PI (acos(-1.0))
 #ifndef ERR
 #define ERR 1e-8
 #endif
 using namespace std;
-
 class iG {
 protected:
     struct point
@@ -251,11 +240,11 @@ public:
     }
     static int iSetWindowHeight(int height)
     {
-        return iWindowHeight = height;
+        iWindowHeight = height;
     }
     static int iSetWindowWidth(int width)
     {
-        return iWindowWidth = width;
+        iWindowWidth = width;
     }
     static int iGetScreenHeight()
     {
@@ -267,11 +256,11 @@ public:
     }
     static int iSetScreenHeight(int height)
     {
-        return iScreenHeight = height;
+        iScreenHeight = height;
     }
     static int iSetScreenWidth(int width)
     {
-        return iScreenWidth = width;
+        iScreenWidth = width;
     }
 
     static double iGetMouseX()
@@ -282,17 +271,14 @@ public:
     {
         return iMouseY;
     }
-    static void iSetMouseX(GLFWwindow* window, double x)
-        {
-            glfwSetCursorPos(window, x, iMouseY);  // Set the X position while keeping Y the same
-        }
-
-        // Function to set mouse Y position
-        static void iSetMouseY(GLFWwindow* window, double y)
-        {
-            glfwSetCursorPos(window, iMouseX, y);  // Set the Y position while keeping X the same
-        }
-
+    static void iSetMouseX(double x)
+    {
+        glutWarpPointer(x, iMouseY);
+    }
+    static void iSetMouseY(double y)
+    {
+        glutWarpPointer(iMouseX, y);
+    }
     static void iSetWindowX(double x)
     {
         iWindowX = x;
@@ -301,10 +287,10 @@ public:
     {
         iWindowY = y;
     }
-    static void iSetMouse(GLFWwindow* window, double x, double y)
-        {
-            glfwSetCursorPos(window, x, y);  // Set the mouse position to (x, y)
-        }
+    static void iSetMouse(double x, double y)
+    {
+        glutWarpPointer(x, y);
+    }
     static double getMouseDirection()
     {
         return iMouseDir;
@@ -337,18 +323,19 @@ public:
         iWindowHeight = height;
         iResize();
     }
-    static void displayFF(GLFWwindow* window)
-        {
-            iDraw();                    // Call the iDraw function (where your rendering happens)
-            glfwSwapBuffers(window);     // Swap buffers to display the rendered frame
-        }
+    static void displayFF(void)
+    {
+        iDraw();
+        glutSwapBuffers() ;
+    }
+
     static void animFF(void)
     {
         if (ifft == 0) {
             ifft = 1;
             iClear();
         }
-         glfwPostEmptyEvent();
+        glutPostRedisplay();
     }
 
     static void joystickHandlerFF(unsigned int buttonMask, int x, int y, int z)
@@ -358,22 +345,22 @@ public:
     static void keyboardHandler1FF(unsigned char key, int x, int y)
     {
         iKeyboard(key);
-         glfwPostEmptyEvent();
+        glutPostRedisplay();
     }
     static void keyboardUpHandler1FF(unsigned char key, int x, int y)
     {
         iKeyboardUp(key);
-         glfwPostEmptyEvent();
+        glutPostRedisplay();
     }
     static void keyboardHandler2FF(int key, int x, int y)
     {
         iSpecialKeyboard(key);
-         glfwPostEmptyEvent();
+        glutPostRedisplay();
     }
     static void keyboardUpHandler2FF(int key, int x, int y)
     {
         iSpecialKeyboardUp(key);
-         glfwPostEmptyEvent();
+        glutPostRedisplay();
     }
     static void mouseDragHandlerFF(int mx, int my)
     {
@@ -405,178 +392,81 @@ public:
         iMouseScroll(dir);
     }
 
-
     class IText {
     public:
-        static GLuint fontTexture; // Texture for the font
-        static stbtt_bakedchar cdata[MAX_CHARACTERS]; // Baked characters data
-        static unsigned char bitmap[512 * 512]; // Bitmap for font rendering
-
-        // Initialize the font
-        static void initFont(const char* fontFile) {
-            unsigned char fontData[1 << 20]; // Allocate memory for the font
-            FILE* fontFileStream = fopen(fontFile, "rb");
-            fread(fontData, 1, 1 << 20, fontFileStream); // Read the font file into memory
-            fclose(fontFileStream);
-
-            // Load font with stb_truetype
-            stbtt_BakeFontBitmap(fontData, 0, FONT_SIZE, bitmap, 512, 512, 32, MAX_CHARACTERS, cdata);
-
-            // Create an OpenGL texture from the bitmap
-            glGenTextures(1, &fontTexture);
-            glBindTexture(GL_TEXTURE_2D, fontTexture);
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, 512, 512, 0, GL_RED, GL_UNSIGNED_BYTE, bitmap);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        static void iSmall(double x, double y, char *str, void* font = GLUT_BITMAP_TIMES_ROMAN_24)
+        {
+            glRasterPos3d(x, y, 0);
+            int i;
+            for (i = 0; str[i]; i++) {
+                glutBitmapCharacter(font, str[i]); //GLUT_BITMAP_8_BY_13, GLUT_BITMAP_TIMES_ROMAN_24
+            }
         }
 
-        // Render small text
-        static void iSmall(double x, double y, const char* str) {
-            glBindTexture(GL_TEXTURE_2D, fontTexture);
-            glEnable(GL_TEXTURE_2D);
+        static void iBig(double x, double y, char *str, void* font = GLUT_STROKE_ROMAN)
+        {
+            char *p;
             glPushMatrix();
             glTranslatef(x, y, 0);
-
-            for (int i = 0; str[i]; i++) {
-                stbtt_bakedchar* c = &cdata[str[i] - 32];
-                float x0 = c->x0 / 512.0f;
-                float y0 = c->y0 / 512.0f;
-                float x1 = c->x1 / 512.0f;
-                float y1 = c->y1 / 512.0f;
-
-                glBegin(GL_QUADS);
-                glTexCoord2f(x0, y0); glVertex2f(i * FONT_SIZE, 0);
-                glTexCoord2f(x1, y0); glVertex2f((i + 1) * FONT_SIZE, 0);
-                glTexCoord2f(x1, y1); glVertex2f((i + 1) * FONT_SIZE, FONT_SIZE);
-                glTexCoord2f(x0, y1); glVertex2f(i * FONT_SIZE, FONT_SIZE);
-                glEnd();
-            }
-
+            for (p = str; *p; p++)
+                glutStrokeCharacter(font, *p); // GLUT_STROKE_ROMAN  , GLUT_STROKE_MONO_ROMAN
             glPopMatrix();
-            glDisable(GL_TEXTURE_2D);
         }
-
-        // Render big text (scaled)
-        static void iBig(double x, double y, const char* str) {
-            glBindTexture(GL_TEXTURE_2D, fontTexture);
-            glEnable(GL_TEXTURE_2D);
-            glPushMatrix();
-            glTranslatef(x, y, 0);
-
-            for (int i = 0; str[i]; i++) {
-                stbtt_bakedchar* c = &cdata[str[i] - 32];
-                float x0 = c->x0 / 512.0f;
-                float y0 = c->y0 / 512.0f;
-                float x1 = c->x1 / 512.0f;
-                float y1 = c->y1 / 512.0f;
-
-                glBegin(GL_QUADS);
-                glTexCoord2f(x0, y0); glVertex2f(i * FONT_SIZE * 1.5, 0);
-                glTexCoord2f(x1, y0); glVertex2f((i + 1) * FONT_SIZE * 1.5, 0);
-                glTexCoord2f(x1, y1); glVertex2f((i + 1) * FONT_SIZE * 1.5, FONT_SIZE * 1.5);
-                glTexCoord2f(x0, y1); glVertex2f(i * FONT_SIZE * 1.5, FONT_SIZE * 1.5);
-                glEnd();
-            }
-
-            glPopMatrix();
-            glDisable(GL_TEXTURE_2D);
-        }
-
     };
+    class ITimer {
+    private:
+        static void (*iAnimFunction[10])(void);
+        static int iAnimCount;
+        static int iAnimDelays[10];
+        static int iAnimPause[10];
+        static void  __stdcall iA0(HWND, unsigned int, unsigned int, unsigned long) {if (!iAnimPause[0])iAnimFunction[0]();}
+        static void  __stdcall iA1(HWND, unsigned int, unsigned int, unsigned long) {if (!iAnimPause[1])iAnimFunction[1]();}
+        static void  __stdcall iA2(HWND, unsigned int, unsigned int, unsigned long) {if (!iAnimPause[2])iAnimFunction[2]();}
+        static void  __stdcall iA3(HWND, unsigned int, unsigned int, unsigned long) {if (!iAnimPause[3])iAnimFunction[3]();}
+        static void  __stdcall iA4(HWND, unsigned int, unsigned int, unsigned long) {if (!iAnimPause[4])iAnimFunction[4]();}
+        static void  __stdcall iA5(HWND, unsigned int, unsigned int, unsigned long) {if (!iAnimPause[5])iAnimFunction[5]();}
+        static void  __stdcall iA6(HWND, unsigned int, unsigned int, unsigned long) {if (!iAnimPause[6])iAnimFunction[6]();}
+        static void  __stdcall iA7(HWND, unsigned int, unsigned int, unsigned long) {if (!iAnimPause[7])iAnimFunction[7]();}
+        static void  __stdcall iA8(HWND, unsigned int, unsigned int, unsigned long) {if (!iAnimPause[8])iAnimFunction[8]();}
+        static void  __stdcall iA9(HWND, unsigned int, unsigned int, unsigned long) {if (!iAnimPause[9])iAnimFunction[9]();}
+    public:
+        static int iSet(int msec, void (*f)(void))
+        {
+            int i = iAnimCount;
 
+            if (iAnimCount >= 10) {printf("Error: Maximum number of already timer used.\n"); return -1;}
 
-       
-   class ITimer {
-        private:
-            static void (*iAnimFunction[10])(void);
-            static int iAnimCount;
-            static int iAnimDelays[10];
-            static int iAnimPause[10];
+            iAnimFunction[i] = f;
+            iAnimDelays[i] = msec;
+            iAnimPause[i] = 0;
 
-            // Change the calling convention to CALLBACK
-            static void CALLBACK iA0(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime) {
-                if (!iAnimPause[0]) iAnimFunction[0]();
+            if (iAnimCount == 0) SetTimer(0, 0, msec, iA0);
+            if (iAnimCount == 1) SetTimer(0, 0, msec, iA1);
+            if (iAnimCount == 2) SetTimer(0, 0, msec, iA2);
+            if (iAnimCount == 3) SetTimer(0, 0, msec, iA3);
+            if (iAnimCount == 4) SetTimer(0, 0, msec, iA4);
+
+            if (iAnimCount == 5) SetTimer(0, 0, msec, iA5);
+            if (iAnimCount == 6) SetTimer(0, 0, msec, iA6);
+            if (iAnimCount == 7) SetTimer(0, 0, msec, iA7);
+            if (iAnimCount == 8) SetTimer(0, 0, msec, iA8);
+            if (iAnimCount == 9) SetTimer(0, 0, msec, iA9);
+            iAnimCount++;
+
+            return iAnimCount - 1;
+        }
+        static void iPause(int index) {
+            if (index >= 0 && index < iAnimCount) {
+                iAnimPause[index] = 1;
             }
+        }
 
-            static void CALLBACK iA1(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime) {
-                if (!iAnimPause[1]) iAnimFunction[1]();
+        static void iResume(int index) {
+            if (index >= 0 && index < iAnimCount) {
+                iAnimPause[index] = 0;
             }
-
-            static void CALLBACK iA2(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime) {
-                if (!iAnimPause[2]) iAnimFunction[2]();
-            }
-
-            static void CALLBACK iA3(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime) {
-                if (!iAnimPause[3]) iAnimFunction[3]();
-            }
-
-            static void CALLBACK iA4(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime) {
-                if (!iAnimPause[4]) iAnimFunction[4]();
-            }
-
-            static void CALLBACK iA5(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime) {
-                if (!iAnimPause[5]) iAnimFunction[5]();
-            }
-
-            static void CALLBACK iA6(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime) {
-                if (!iAnimPause[6]) iAnimFunction[6]();
-            }
-
-            static void CALLBACK iA7(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime) {
-                if (!iAnimPause[7]) iAnimFunction[7]();
-            }
-
-            static void CALLBACK iA8(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime) {
-                if (!iAnimPause[8]) iAnimFunction[8]();
-            }
-
-            static void CALLBACK iA9(HWND hwnd, UINT uMsg, UINT_PTR idEvent, DWORD dwTime) {
-                if (!iAnimPause[9]) iAnimFunction[9]();
-            }
-
-        public:
-            static int iSet(int msec, void (*f)(void)) {
-                int i = iAnimCount;
-
-                if (iAnimCount >= 10) {
-                    printf("Error: Maximum number of timers already used.\n");
-                    return -1;
-                }
-
-                iAnimFunction[i] = f;
-                iAnimDelays[i] = msec;
-                iAnimPause[i] = 0;
-
-                // Set the timer with the correct callback function
-                if (iAnimCount == 0) SetTimer(0, 0, msec, iA0);
-                if (iAnimCount == 1) SetTimer(0, 0, msec, iA1);
-                if (iAnimCount == 2) SetTimer(0, 0, msec, iA2);
-                if (iAnimCount == 3) SetTimer(0, 0, msec, iA3);
-                if (iAnimCount == 4) SetTimer(0, 0, msec, iA4);
-                if (iAnimCount == 5) SetTimer(0, 0, msec, iA5);
-                if (iAnimCount == 6) SetTimer(0, 0, msec, iA6);
-                if (iAnimCount == 7) SetTimer(0, 0, msec, iA7);
-                if (iAnimCount == 8) SetTimer(0, 0, msec, iA8);
-                if (iAnimCount == 9) SetTimer(0, 0, msec, iA9);
-
-                iAnimCount++;
-
-                return iAnimCount - 1;
-            }
-
-            static void iPause(int index) {
-                if (index >= 0 && index < iAnimCount) {
-                    iAnimPause[index] = 1;
-                }
-            }
-
-            static void iResume(int index) {
-                if (index >= 0 && index < iAnimCount) {
-                    iAnimPause[index] = 0;
-                }
-            }
-        };
-
+        }
+    };
     class ISetColor {
     public:
         static void iSolid(double r, double g, double b)
@@ -642,53 +532,46 @@ public:
             glColor4f(r, g, b, a);
         }
     };
-   
-
-
-
-class IShowImage {
-public:
-    static void BMP2(int x, int y, const char* filename, int ignoreColor);
-
-    static void BMP3(int x, int y, const char* filename, int ignoreColor)
-    {
-        int width, height, channels;
-        unsigned char* data = stbi_load(filename, &width, &height, &channels, 0);
-
-        if (data == nullptr) {
-            std::cerr << "Error loading image" << std::endl;
-            return;
-        }
-
-        int nPixels = width * height;
-        int* rgPixels = new int[nPixels];
-
-        for (int i = 0, j = 0; i < nPixels; i++, j += 3)
+    class IShowImage {
+    public:
+        static void BMP2(int x, int y, const char* filename, int ignoreColor);
+        static void BMP3(int x, int y, char filename[], int ignoreColor)
         {
-            int rgb = 0;
-            for (int k = 2; k >= 0; k--) {
-                rgb = ((rgb << 8) | data[j + k]);
+            AUX_RGBImageRec *TextureImage;
+            TextureImage = auxDIBImageLoad(filename);
+
+            int i, j, k;
+            int width = TextureImage->sizeX;
+            int height = TextureImage->sizeY;
+            int nPixels = width * height;
+            int *rgPixels = new int[nPixels];
+
+            for (i = 0, j = 0; i < nPixels; i++, j += 3)
+            {
+                int rgb = 0;
+                for (int k = 2; k >= 0; k--)
+                {
+                    rgb = ((rgb << 8) | TextureImage->data[j + k]);
+                }
+
+                rgPixels[i] = (rgb == ignoreColor) ? 0 : 255;
+                rgPixels[i] = ((rgPixels[i] << 24) | rgb);
             }
 
-            rgPixels[i] = (rgb == ignoreColor) ? 0 : 255;
-            rgPixels[i] = ((rgPixels[i] << 24) | rgb);
+            glRasterPos2f(x, y);
+            glDrawPixels(width, height, GL_RGBA, GL_UNSIGNED_BYTE, rgPixels);
+
+            delete []rgPixels;
+            free(TextureImage->data);
+            free(TextureImage);
         }
 
-        glRasterPos2f(x, y);
-        glDrawPixels(width, height, GL_RGBA, GL_UNSIGNED_BYTE, rgPixels);
 
-        delete[] rgPixels;
-        stbi_image_free(data); // Free the image data after usage
-    }
-
-    static void BMP(int x, int y, const char* filename)
-    {
-        BMP2(x, y, filename, -1);  // Ignore color
-    }
-};
-
-
-
+        static void BMP(int x, int y, char filename[])
+        {
+            BMP2(x, y, filename, -1 /* ignoreColor */);
+        }
+    } IShowImage;
 
     class IDraw {
     public:
@@ -979,3 +862,12 @@ public:
 };
 
 #endif
+
+
+
+
+
+
+
+
+
